@@ -1,0 +1,10 @@
+version: "3"
+
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "7000:7000" # Esponi la porta 3000 (o quella usata dall'app)
+    env_file:
+      - .env # Carica le variabili d'ambiente da un file .env
