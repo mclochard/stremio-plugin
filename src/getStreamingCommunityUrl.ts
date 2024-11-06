@@ -90,17 +90,44 @@ const getStreamingCommunityUrl = async (
 
   if (!iframeSrc) return false;
 
-  const parsedUrl = new URL(iframeSrc);
-  const pathname = parsedUrl.pathname;
-  const queryParams = parsedUrl.searchParams;
+  const $iframeContent = await cf.request(iframeSrc);
 
-  const vixid = pathname.split("/")[2];
+  if ($iframeContent.statusCode !== 200) return false;
 
-  const url = `https://vixcloud.co/playlist/${vixid}.m3u8?token=${queryParams.get(
-    "token"
-  )}&expires=${queryParams.get("expires")}`;
+  const videoData = extractVideoData($iframeContent.body);
 
-  return url;
+  if (!videoData) return false;
+
+  const { token, expires, url } = videoData;
+
+  const parsedIframeSrc = new URL(iframeSrc);
+
+  return `${url}.m3u8?token=${token}&expires=${expires}${
+    parsedIframeSrc.searchParams.has("canPlayFHD") ? "&h=1" : ""
+  }${parsedIframeSrc.searchParams.has("b") ? "&b=1" : ""}`;
 };
+
+function extractVideoData(
+  html: string
+): { token?: string; expires?: string; url?: string } | null {
+  // Match the content inside the <script> tag
+  const scriptMatch = html.match(/<script>([\n\s\S]*?)<\/script>/);
+  if (!scriptMatch) {
+    return null;
+  }
+
+  // Extract the JavaScript content
+  const scriptContent = scriptMatch[1];
+
+  // Use `eval` in a restricted context to avoid global variable pollution
+  const sandbox: { window: any } = { window: {} };
+  const evalScript = new Function("window", scriptContent);
+  evalScript(sandbox.window);
+
+  // Extract the needed values from sandbox
+  const { token, expires } = sandbox.window.masterPlaylist?.params || {};
+  const url = sandbox.window.masterPlaylist?.url;
+  return { token, expires, url };
+}
 
 export { getStreamingCommunityUrl };
